@@ -1,5 +1,4 @@
-﻿using System;
-using System.Security.Cryptography.X509Certificates;
+﻿using System.Security.Cryptography.X509Certificates;
 
 namespace AuthenticatingWebViewTest.iOS
 {
@@ -16,13 +15,13 @@ namespace AuthenticatingWebViewTest.iOS
 
         public string Host { get { return _host; } }
 
-        public byte[] Hash { get { return _certificate.GetCertHash(); } } 
+        public byte[] Hash { get { return _certificate.GetCertHash(); } }
 
-        public string HashString { get { return _certificate.GetCertHashString(); } } 
+        public string HashString { get { return _certificate.GetCertHashString(); } }
 
-        public byte[] PublicKey { get { return _certificate.GetPublicKey(); } } 
+        public byte[] PublicKey { get { return _certificate.GetPublicKey(); } }
 
-        public string PublicKeyString { get { return _certificate.GetPublicKeyString(); } } 
+        public string PublicKeyString { get { _certificate.GetPublicKeyString(); } }
     }
 }
 

@@ -1,6 +1,4 @@
-﻿using System;
-
-using Xamarin.Forms;
+﻿using Xamarin.Forms;
 
 namespace AuthenticatingWebViewTest
 {
@@ -10,17 +8,17 @@ namespace AuthenticatingWebViewTest
         {
             var webView = new AuthenticatingWebView()
             {
-                Source = new UrlWebViewSource { Url = "https://google.com" },
+                Source = new UrlWebViewSource { Url = "https://www.pcwebshop.co.uk/" },
                 ShouldTrustCertificate = cert =>
                 {
-                    return false;
+                    return true;
                 },
             };
             webView.Navigated += (sender, e) =>
             {
                 if (e.Result == WebNavigationResult.Failure)
                 {
-                    webView.Source = new UrlWebViewSource { Url = "http://google.com" };
+                    webView.Source = new UrlWebViewSource { Url = "http://blog.adamkemp.com" };
                 }
             };
             MainPage = new ContentPage {

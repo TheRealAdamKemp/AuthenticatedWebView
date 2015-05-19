@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Reflection;
 using System.Runtime.InteropServices;
 using Foundation;
 using ObjCRuntime;
@@ -17,6 +18,10 @@ namespace AuthenticatingWebViewTest.iOS
     {
         public new AuthenticatingWebView Element { get { return (AuthenticatingWebView)base.Element; } }
 
+        private WebNavigationEvent _lastNavigationEvent;
+        private WebViewSource _lastSource;
+        private string _lastUrl;
+
         protected override void OnElementChanged (VisualElementChangedEventArgs e)
         {
             base.OnElementChanged (e);
@@ -30,6 +35,23 @@ namespace AuthenticatingWebViewTest.iOS
                 Delegate = null;
                 Delegate = new AuthenticatingWebViewDelegate(this, originalDelegate);
             }
+
+            if (e.OldElement != null)
+            {
+                ((WebView)e.OldElement).Navigating -= HandleElementNavigating;
+            }
+
+            if (e.NewElement != null)
+            {
+                ((WebView)e.NewElement).Navigating += HandleElementNavigating;
+            }
+        }
+
+        private void HandleElementNavigating(object sender, WebNavigatingEventArgs e)
+        {
+            _lastNavigationEvent = e.NavigationEvent;
+            _lastSource = e.Source;
+            _lastUrl = e.Url;
         }
 
         private class AuthenticatingWebViewDelegate : UIWebViewDelegate, INSUrlConnectionDelegate
@@ -104,9 +126,12 @@ namespace AuthenticatingWebViewTest.iOS
                         Console.WriteLine("Rejecting request");
                         challenge.Sender.CancelAuthenticationChallenge(challenge);
 
-                        // TODO: Send failed repsonse.
-                        // This is hard because Xamarin made SendNavigated internal for some idiotic reason.
-                        // We'll have to use reflection. *sigh*
+                        SendNavigated(
+                            new WebNavigatedEventArgs(
+                                _renderer._lastNavigationEvent,
+                                _renderer._lastSource ,
+                                _renderer._lastUrl,
+                                WebNavigationResult.Failure));
 
                         return;
                     }
@@ -118,7 +143,10 @@ namespace AuthenticatingWebViewTest.iOS
             private void ReceivedResponse (NSUrlConnection connection, NSUrlResponse response)
             {
                 connection.Cancel();
-                _renderer.LoadRequest(_request);
+                if (_request != null)
+                {
+                    _renderer.LoadRequest(_request);
+                }
             }
 
             #region Ugly wrapper stuff
@@ -171,6 +199,42 @@ namespace AuthenticatingWebViewTest.iOS
                 }
 
                 return defaultResult;
+            }
+
+            #endregion
+
+            #region Ugly reflection stuff
+
+            private MethodInfo _sendNavigatedMethodInfo;
+
+            private delegate void SendNavigatedDelegate(WebNavigatedEventArgs args);
+
+            private MethodInfo SendNavigatedMethodInfo
+            {
+                get
+                {
+                    if (_sendNavigatedMethodInfo == null)
+                    {
+                        _sendNavigatedMethodInfo = typeof(WebView).GetMethod(
+                            name: "SendNavigated",
+                            bindingAttr: BindingFlags.Instance | BindingFlags.NonPublic,
+                            binder: null,
+                            types: new[] { typeof(WebNavigatedEventArgs) },
+                            modifiers: null);
+                    }
+
+                    return _sendNavigatedMethodInfo;
+                }
+            }
+
+            private void SendNavigated(WebNavigatedEventArgs args)
+            {
+                var method = SendNavigatedMethodInfo;
+                if (method != null)
+                {
+                    var methodDelegate = (SendNavigatedDelegate)method.CreateDelegate(typeof(SendNavigatedDelegate), _renderer.Element);
+                    methodDelegate(args);
+                }
             }
 
             #endregion

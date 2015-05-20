@@ -9,6 +9,8 @@ namespace AuthenticatingWebViewTest.Droid
 {
     public class Certificate : ICertificate
     {
+        private const int SubjectPublicKeyInfoHeaderLength = 24;
+
         private readonly string _host;
         private readonly byte[] _hashBytes;
         private readonly byte[] _publicKeyBytes;
@@ -19,6 +21,8 @@ namespace AuthenticatingWebViewTest.Droid
         public Certificate(string host, SslCertificate certificate)
         {
             _host = host;
+
+            // A really circuitous path to getting the public key data.
             var bundle = SslCertificate.SaveState(certificate);
             var bytes = bundle.GetByteArray("x509-certificate");
             var factory = CertificateFactory.GetInstance("X.509");
@@ -27,7 +31,18 @@ namespace AuthenticatingWebViewTest.Droid
             messageDigest.Update(x509Certificate.GetEncoded());
             _hashBytes = messageDigest.Digest();
 
-            _publicKeyBytes = x509Certificate.PublicKey.GetEncoded();
+            var encodedBytes = x509Certificate.PublicKey.GetEncoded();
+
+            // The encoded public key uses the ASN.1 encoded SubjectPublicKeyInfo structure.
+            // The .Net X509Certificate class, which we use on iOS, gives us a subset of that
+            // data (sans the header). Therefore we strip off the header to get the same data
+            // on both platforms.
+
+            var publicKeyLength = encodedBytes.Length - SubjectPublicKeyInfoHeaderLength;
+            var publicKeyBytes = new byte[publicKeyLength];
+            Array.Copy(encodedBytes, SubjectPublicKeyInfoHeaderLength, publicKeyBytes, 0, publicKeyLength);
+
+            _publicKeyBytes = publicKeyBytes;
 
             _hashString = new Lazy<string>(() => ByteArrayToHexString(_hashBytes));
             _publicKeyString = new Lazy<string>(() => ByteArrayToHexString(_publicKeyBytes));

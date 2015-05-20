@@ -22,9 +22,9 @@ namespace AuthenticatingWebViewTest.iOS
         private WebViewSource _lastSource;
         private string _lastUrl;
 
-        protected override void OnElementChanged (VisualElementChangedEventArgs e)
+        protected override void OnElementChanged(VisualElementChangedEventArgs e)
         {
-            base.OnElementChanged (e);
+            base.OnElementChanged(e);
 
             if (!(Delegate is AuthenticatingWebViewDelegate))
             {
@@ -66,22 +66,27 @@ namespace AuthenticatingWebViewTest.iOS
                 _originalDelegate = originalDelegate;
             }
 
-            public override void LoadFailed (UIWebView webView, NSError error)
+            public override void LoadFailed(UIWebView webView, NSError error)
             {
-                ForwardDelegateMethod("webView:didFailLoadWithError:", webView, error);
+                // Ignore "Frame load interrupted" error that occurrs during redirects.
+                // Seems innocuous.
+                if (error.Domain != "WebKitErrorDomain" || error.Code != 102)
+                {
+                    ForwardDelegateMethod("webView:didFailLoadWithError:", webView, error);
+                }
             }
 
-            public override void LoadingFinished (UIWebView webView)
+            public override void LoadingFinished(UIWebView webView)
             {
                 ForwardDelegateMethod("webViewDidFinishLoad:", webView);
             }
 
-            public override void LoadStarted (UIWebView webView)
+            public override void LoadStarted(UIWebView webView)
             {
                 ForwardDelegateMethod("webViewDidStartLoad:", webView);
             }
 
-            public override bool ShouldStartLoad (UIWebView webView, NSUrlRequest request, UIWebViewNavigationType navigationType)
+            public override bool ShouldStartLoad(UIWebView webView, NSUrlRequest request, UIWebViewNavigationType navigationType)
             {
                 if (_request != null)
                 {
@@ -91,7 +96,7 @@ namespace AuthenticatingWebViewTest.iOS
 
                 bool originalResult = ForwardDelegatePredicate("webView:shouldStartLoadWithRequest:navigationType:", webView, request, (int)navigationType, defaultResult: true);
 
-                if (_renderer.Element.ShouldTrustCertificate != null)
+                if (_renderer.Element.ShouldTrustUnknownCertificate != null)
                 {
                     if (originalResult)
                     {
@@ -101,37 +106,35 @@ namespace AuthenticatingWebViewTest.iOS
                     return false;
                 }
 
-                return originalResult;
+                return originalResult;  
             }
 
             [Export ("connection:willSendRequestForAuthenticationChallenge:")]
-            private void WillSendRequestForAuthenticationChallenge (NSUrlConnection connection, NSUrlAuthenticationChallenge challenge)
+            private void WillSendRequestForAuthenticationChallenge(NSUrlConnection connection, NSUrlAuthenticationChallenge challenge)
             {
                 if (challenge.ProtectionSpace.AuthenticationMethod == NSUrlProtectionSpace.AuthenticationMethodServerTrust)
                 {
                     var trust = challenge.ProtectionSpace.ServerSecTrust;
-                    bool trustedCert = false;
-                    for (int i = 0; i != trust.Count; ++i)
+                    var result = trust.Evaluate();
+                    bool trustedCertificate = result == SecTrustResult.Proceed || result == SecTrustResult.Unspecified;
+
+                    if (!trustedCertificate && trust.Count != 0)
                     {
-                        var cert = new Certificate(challenge.ProtectionSpace.Host, trust[i].ToX509Certificate2());
-                        if (_renderer.Element.ShouldTrustCertificate(cert))
-                        {
-                            challenge.Sender.UseCredential(new NSUrlCredential(trust), challenge);
-                            trustedCert = true;
-                            break;
-                        }
+                        var originalCertificate = trust[0].ToX509Certificate2();
+                        var x509Certificate = new Certificate(challenge.ProtectionSpace.Host, originalCertificate);
+                        trustedCertificate = _renderer.Element.ShouldTrustUnknownCertificate(x509Certificate);
                     }
-                    if (!trustedCert)
+
+                    if (trustedCertificate)
+                    {
+                        challenge.Sender.UseCredential(new NSUrlCredential(trust), challenge);
+                    }
+                    else
                     {
                         Console.WriteLine("Rejecting request");
                         challenge.Sender.CancelAuthenticationChallenge(challenge);
 
-                        SendNavigated(
-                            new WebNavigatedEventArgs(
-                                _renderer._lastNavigationEvent,
-                                _renderer._lastSource ,
-                                _renderer._lastUrl,
-                                WebNavigationResult.Failure));
+                        SendFailedNavigation();
 
                         return;
                     }
@@ -139,8 +142,24 @@ namespace AuthenticatingWebViewTest.iOS
                 challenge.Sender.PerformDefaultHandling(challenge);
             }
 
+            private void SendFailedNavigation()
+            {
+                SendNavigated(
+                    new WebNavigatedEventArgs(
+                        _renderer._lastNavigationEvent,
+                        _renderer._lastSource ,
+                        _renderer._lastUrl,
+                        WebNavigationResult.Failure));
+            }
+
+            [Export("connection:didFailWithError:")]
+            private void ConnectionFailed(NSUrlConnection connection, NSError error)
+            {
+                SendFailedNavigation();
+            }
+
             [Export ("connection:didReceiveResponse:")]
-            private void ReceivedResponse (NSUrlConnection connection, NSUrlResponse response)
+            private void ReceivedResponse(NSUrlConnection connection, NSUrlResponse response)
             {
                 connection.Cancel();
                 if (_request != null)

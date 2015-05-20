@@ -8,12 +8,11 @@ namespace AuthenticatingWebViewTest
         {
             var webView = new AuthenticatingWebView()
             {
+                // This site happens to have an unverified certificate.
                 Source = new UrlWebViewSource { Url = "https://www.pcwebshop.co.uk/" },
-                ShouldTrustCertificate = cert =>
-                {
-                    return true;
-                },
+                ShouldTrustUnknownCertificate = cert => true,
             };
+
             webView.Navigated += (sender, e) =>
             {
                 if (e.Result == WebNavigationResult.Failure)
@@ -21,24 +20,8 @@ namespace AuthenticatingWebViewTest
                     webView.Source = new UrlWebViewSource { Url = "http://blog.adamkemp.com" };
                 }
             };
-            MainPage = new ContentPage {
-                Content = webView,
-            };
-        }
 
-        protected override void OnStart ()
-        {
-            // Handle when your app starts
-        }
-
-        protected override void OnSleep ()
-        {
-            // Handle when your app sleeps
-        }
-
-        protected override void OnResume ()
-        {
-            // Handle when your app resumes
+            MainPage = new ContentPage { Content = webView };
         }
     }
 }

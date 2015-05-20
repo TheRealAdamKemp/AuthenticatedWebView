@@ -21,7 +21,7 @@ namespace AuthenticatingWebViewTest.iOS
 
         public byte[] PublicKey { get { return _certificate.GetPublicKey(); } }
 
-        public string PublicKeyString { get { _certificate.GetPublicKeyString(); } }
+        public string PublicKeyString { get { return _certificate.GetPublicKeyString(); } }
     }
 }
 

@@ -114,10 +114,10 @@ namespace AuthenticatingWebViewTest.Droid
             public override void OnReceivedSslError(Android.Webkit.WebView view, Android.Webkit.SslErrorHandler handler, Android.Net.Http.SslError error)
             {
                 bool success = false;
-                if (_renderer.Element.ShouldTrustCertificate != null)
+                if (_renderer.Element.ShouldTrustUnknownCertificate != null)
                 {
                     var certificate = new Certificate(error.Url, error.Certificate);
-                    var result = _renderer.Element.ShouldTrustCertificate(certificate);
+                    var result = _renderer.Element.ShouldTrustUnknownCertificate(certificate);
                     if (result)
                     {
                         success = true;
